@@ -5,30 +5,108 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class FileUploadController extends Controller
 {
     public function upload(Request $request)
     {
-        // Validation des fichiers
+        // Log pour diagnostiquer les problèmes
+        Log::info('Upload attempt', [
+            'user_id' => Auth::id(),
+            'file_size' => $request->file('file')?->getSize(),
+            'file_type' => $request->file('file')?->getMimeType(),
+            'file_name' => $request->file('file')?->getClientOriginalName(),
+            'has_csrf_token' => $request->hasHeader('X-CSRF-TOKEN'),
+            'csrf_token_length' => strlen($request->header('X-CSRF-TOKEN', '')),
+        ]);
+
+        // Validation des fichiers avec des limites plus réalistes
         $request->validate([
-            'file' => 'required|file|max:102400', // 100MB max
+            'file' => 'required|file|max:51200', // 50MB max (correspond à la nouvelle config)
             'folder' => 'nullable|string|max:255',
             'assigned_users' => 'nullable|array',
             'assigned_groups' => 'nullable|array',
             'permissions' => 'nullable|array'
+        ], [
+            'file.max' => 'Le fichier ne peut pas dépasser 50MB.',
+            'file.required' => 'Aucun fichier n\'a été sélectionné.',
+            'file.file' => 'Le fichier uploadé n\'est pas valide.'
         ]);
 
         try {
             $file = $request->file('file');
             $folder = $request->input('folder', '');
             
+            // Vérifier le type MIME pour les PDF
+            $mimeType = $file->getMimeType();
+            $allowedMimes = [
+                'application/pdf',
+                'image/jpeg',
+                'image/png',
+                'image/gif',
+                'image/webp',
+                'image/bmp',
+                'image/tiff',
+                'text/plain',
+                'text/html',
+                'text/css',
+                'text/javascript',
+                'application/json',
+                'application/xml',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'application/vnd.ms-excel',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'application/vnd.ms-powerpoint',
+                'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                'text/csv',
+                'application/zip',
+                'application/x-rar-compressed',
+                'application/x-7z-compressed',
+                'video/mp4',
+                'video/avi',
+                'video/mov',
+                'video/wmv',
+                'audio/mpeg',
+                'audio/wav',
+                'audio/ogg',
+                'audio/mp4'
+            ];
+            
+            // Vérification spéciale pour les PDF
+            $extension = strtolower($file->getClientOriginalExtension());
+            if ($extension === 'pdf' && $mimeType !== 'application/pdf') {
+                // Certains PDF peuvent avoir des types MIME différents
+                Log::info('PDF with non-standard MIME type', [
+                    'mime_type' => $mimeType,
+                    'extension' => $extension,
+                    'file_name' => $file->getClientOriginalName()
+                ]);
+                // On accepte quand même si l'extension est .pdf
+            } elseif (!in_array($mimeType, $allowedMimes)) {
+                Log::warning('Invalid MIME type', [
+                    'mime_type' => $mimeType, 
+                    'file_name' => $file->getClientOriginalName(),
+                    'extension' => $extension
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Type de fichier non autorisé: ' . $mimeType . ' (Extension: ' . $extension . ')'
+                ], 400);
+            }
+            
             // Générer un nom unique pour le fichier
             $filename = time() . '_' . Str::random(10) . '.' . $file->getClientOriginalExtension();
             
             // Définir le chemin de stockage
             $path = $folder ? "uploads/{$folder}" : 'uploads';
+            
+            // Créer le dossier s'il n'existe pas
+            if (!Storage::disk('public')->exists($path)) {
+                Storage::disk('public')->makeDirectory($path);
+            }
             
             // Stocker le fichier
             $filePath = $file->storeAs($path, $filename, 'public');
@@ -39,7 +117,7 @@ class FileUploadController extends Controller
                 'filename' => $filename,
                 'path' => $filePath,
                 'size' => $file->getSize(),
-                'mime_type' => $file->getMimeType(),
+                'mime_type' => $mimeType,
                 'folder' => $folder,
                 'uploaded_at' => now(),
                 'user_id' => Auth::id(),
@@ -51,6 +129,12 @@ class FileUploadController extends Controller
             // Ici vous pourriez sauvegarder en base de données
             // File::create($fileData);
             
+            Log::info('File uploaded successfully', [
+                'file_path' => $filePath,
+                'file_size' => $file->getSize(),
+                'user_id' => Auth::id()
+            ]);
+            
             return response()->json([
                 'success' => true,
                 'message' => 'Fichier téléchargé avec succès',
@@ -58,6 +142,13 @@ class FileUploadController extends Controller
             ]);
             
         } catch (\Exception $e) {
+            Log::error('Upload error', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'user_id' => Auth::id()
+            ]);
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors du téléchargement: ' . $e->getMessage()

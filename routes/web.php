@@ -29,6 +29,9 @@ Route::get('permissions', function () {
 // Routes API pour l'upload
 Route::post('api/upload', [App\Http\Controllers\FileUploadController::class, 'upload'])
     ->middleware(['auth', 'verified'])->name('api.upload');
+Route::get('api/csrf-token', function () {
+    return response()->json(['token' => csrf_token()]);
+})->middleware(['auth', 'verified'])->name('api.csrf-token');
 Route::get('api/files', [App\Http\Controllers\FileUploadController::class, 'getFiles'])
     ->middleware(['auth', 'verified'])->name('api.files');
 Route::post('api/folders', [App\Http\Controllers\FileUploadController::class, 'createFolder'])

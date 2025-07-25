@@ -45,27 +45,27 @@ import { Archive, Shield, FolderOpen, Search, Cloud, Upload, Download, Users, Za
         <section class="relative py-20 lg:py-32 pt-32">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="text-center">
-                    <div class="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-sm font-medium mb-6 animate-fade-in-up opacity-0" style="animation-delay: 0.2s;">
+                    <div class="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-sm font-medium mb-6">
                         <Zap class="w-4 h-4 mr-2 animate-pulse" />
                         Nouvelle génération d'archivage
                     </div>
                     
-                    <h1 class="text-4xl lg:text-6xl font-bold text-slate-900 leading-tight mb-6 animate-fade-in-up opacity-0" style="animation-delay: 0.4s;">
+                    <h1 class="text-4xl lg:text-6xl font-bold text-slate-900 leading-tight mb-6">
                         Vos fichiers,
                         <span class="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent relative">
-                            <span class="animate-gradient-x bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 bg-clip-text text-transparent bg-[length:200%_100%]">
+                            <span class="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 bg-clip-text text-transparent">
                                 organisés
                             </span>
                         </span>
                         pour l'éternité
                     </h1>
                     
-                    <p class="text-xl text-slate-600 mb-8 leading-relaxed max-w-3xl mx-auto animate-fade-in-up opacity-0" style="animation-delay: 0.6s;">
+                    <p class="text-xl text-slate-600 mb-8 leading-relaxed max-w-3xl mx-auto">
                         ArchiveX révolutionne la gestion de vos documents avec un chiffrement AES-256, 
                         une organisation intelligente et une recherche instantanée.
                     </p>
 
-                    <div class="flex flex-col sm:flex-row gap-4 justify-center mb-12 animate-fade-in-up opacity-0" style="animation-delay: 0.8s;">
+                    <div class="flex flex-col sm:flex-row gap-4 justify-center mb-12">
                         <Link 
                             :href="route('register')" 
                             class="inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-300 font-semibold hover:scale-105 hover:shadow-lg"
@@ -83,7 +83,7 @@ import { Archive, Shield, FolderOpen, Search, Cloud, Upload, Download, Users, Za
                     </div>
 
                     <!-- Stats -->
-                    <div class="grid grid-cols-3 gap-6 max-w-md mx-auto animate-fade-in-up opacity-0" style="animation-delay: 1s;">
+                    <div class="grid grid-cols-3 gap-6 max-w-md mx-auto">
                         <div class="text-center group cursor-pointer">
                             <div class="text-2xl font-bold text-slate-900 group-hover:text-blue-600 transition-colors duration-300 animate-count-up">1M+</div>
                             <div class="text-sm text-slate-500 group-hover:text-slate-700 transition-colors duration-300">Fichiers archivés</div>

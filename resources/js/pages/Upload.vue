@@ -98,6 +98,50 @@ const generateId = () => Math.random().toString(36).substr(2, 9);
 const addFiles = (newFiles: FileList | File[]) => {
     const fileArray = Array.from(newFiles);
     
+    // Types de fichiers autorisés
+    const allowedTypes = [
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'image/bmp',
+        'image/tiff',
+        'text/plain',
+        'text/html',
+        'text/css',
+        'text/javascript',
+        'application/json',
+        'application/xml',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'text/csv',
+        'application/zip',
+        'application/x-rar-compressed',
+        'application/x-7z-compressed',
+        'video/mp4',
+        'video/avi',
+        'video/mov',
+        'video/wmv',
+        'audio/mpeg',
+        'audio/wav',
+        'audio/ogg',
+        'audio/mp4'
+    ];
+    
+    // Extensions autorisées (fallback)
+    const allowedExtensions = [
+        'pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff',
+        'txt', 'html', 'htm', 'css', 'js', 'json', 'xml',
+        'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'csv',
+        'zip', 'rar', '7z', 'mp4', 'avi', 'mov', 'wmv',
+        'mp3', 'wav', 'ogg', 'm4a'
+    ];
+    
     fileArray.forEach(file => {
         // Vérifier si le fichier n'est pas déjà ajouté
         const exists = files.value.some(f => 
@@ -107,6 +151,39 @@ const addFiles = (newFiles: FileList | File[]) => {
         );
         
         if (!exists) {
+            // Validation du type de fichier
+            const fileExtension = file.name.split('.').pop()?.toLowerCase();
+            const isValidType = allowedTypes.includes(file.type) || 
+                               (fileExtension && allowedExtensions.includes(fileExtension));
+            
+            if (!isValidType) {
+                console.warn(`Type de fichier non autorisé: ${file.type} (${file.name})`);
+                // On ajoute quand même mais avec un statut d'erreur
+                const fileUpload: FileUpload = {
+                    id: generateId(),
+                    file,
+                    progress: 0,
+                    status: 'error',
+                    error: `Type de fichier non autorisé: ${file.type}`
+                };
+                files.value.push(fileUpload);
+                return;
+            }
+            
+            // Validation de la taille (50MB max)
+            const maxSize = 50 * 1024 * 1024;
+            if (file.size > maxSize) {
+                const fileUpload: FileUpload = {
+                    id: generateId(),
+                    file,
+                    progress: 0,
+                    status: 'error',
+                    error: `Fichier trop volumineux: ${formatFileSize(file.size)} (max: 50MB)`
+                };
+                files.value.push(fileUpload);
+                return;
+            }
+            
             const fileUpload: FileUpload = {
                 id: generateId(),
                 file,
@@ -148,22 +225,73 @@ const uploadFile = async (fileUpload: FileUpload) => {
         const uploadPromise = new Promise((resolve, reject) => {
             xhr.onload = () => {
                 if (xhr.status === 200) {
-                    resolve(JSON.parse(xhr.responseText));
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.success) {
+                            resolve(response);
+                        } else {
+                            reject(new Error(response.message || 'Erreur lors de l\'upload'));
+                        }
+                    } catch (e) {
+                        reject(new Error('Réponse invalide du serveur'));
+                    }
+                } else if (xhr.status === 419) {
+                    reject(new Error('Erreur CSRF: Veuillez rafraîchir la page et réessayer'));
+                } else if (xhr.status === 413) {
+                    reject(new Error('Fichier trop volumineux (max 40MB)'));
+                } else if (xhr.status === 400) {
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        reject(new Error(response.message || 'Fichier non autorisé'));
+                    } catch (e) {
+                        reject(new Error('Fichier non autorisé'));
+                    }
                 } else {
-                    reject(new Error(`Upload failed: ${xhr.status}`));
+                    reject(new Error(`Erreur serveur: ${xhr.status}`));
                 }
             };
             
-            xhr.onerror = () => reject(new Error('Network error'));
+            xhr.onerror = () => reject(new Error('Erreur réseau'));
+            xhr.ontimeout = () => reject(new Error('Timeout de la requête'));
         });
         
-        // Obtenir le token CSRF
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        // Obtenir le token CSRF de manière plus robuste
+        let csrfToken = '';
+        const metaTag = document.querySelector('meta[name="csrf-token"]');
+        if (metaTag) {
+            csrfToken = metaTag.getAttribute('content') || '';
+        }
+        
+        // Si pas de token dans le meta, essayer de le récupérer via une requête
+        if (!csrfToken) {
+            try {
+                const tokenResponse = await fetch('/api/csrf-token', {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                if (tokenResponse.ok) {
+                    const tokenData = await tokenResponse.json();
+                    csrfToken = tokenData.token;
+                }
+            } catch (e) {
+                console.warn('Impossible de récupérer le token CSRF:', e);
+            }
+        }
         
         // Configurer et envoyer la requête
         xhr.open('POST', '/api/upload');
         xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken);
         xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.timeout = 300000; // 5 minutes timeout
+        
+        // Vérifier la taille du fichier côté client
+        const maxSize = 50 * 1024 * 1024; // 50MB
+        if (fileUpload.file.size > maxSize) {
+            throw new Error(`Fichier trop volumineux: ${formatFileSize(fileUpload.file.size)} (max: 50MB)`);
+        }
+        
         xhr.send(formData);
         
         // Attendre la réponse
@@ -174,6 +302,9 @@ const uploadFile = async (fileUpload: FileUpload) => {
     } catch (error) {
         fileUpload.status = 'error';
         fileUpload.error = error instanceof Error ? error.message : 'Erreur lors du téléchargement';
+        
+        // Log de l'erreur pour debug
+        console.error('Upload error for file:', fileUpload.file.name, error);
     }
 };
 
